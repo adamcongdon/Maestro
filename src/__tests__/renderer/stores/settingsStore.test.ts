@@ -94,6 +94,8 @@ function resetStore() {
 		directorNotesSettings: { provider: 'claude-code', defaultLookbackDays: 7 },
 		wakatimeApiKey: '',
 		wakatimeEnabled: false,
+		forcedParallelExecution: false,
+		forcedParallelAcknowledged: false,
 	});
 }
 
@@ -307,6 +309,26 @@ describe('settingsStore', () => {
 				useSettingsStore.getState().setEnterToSendTerminal(false);
 				expect(useSettingsStore.getState().enterToSendTerminal).toBe(false);
 				expect(window.maestro.settings.set).toHaveBeenCalledWith('enterToSendTerminal', false);
+			});
+
+			it('setForcedParallelExecution updates state and persists', () => {
+				useSettingsStore.getState().setForcedParallelExecution(true);
+				expect(useSettingsStore.getState().forcedParallelExecution).toBe(true);
+				expect(window.maestro.settings.set).toHaveBeenCalledWith('forcedParallelExecution', true);
+			});
+
+			it('setForcedParallelAcknowledged updates state and persists', () => {
+				useSettingsStore.getState().setForcedParallelAcknowledged(true);
+				expect(useSettingsStore.getState().forcedParallelAcknowledged).toBe(true);
+				expect(window.maestro.settings.set).toHaveBeenCalledWith('forcedParallelAcknowledged', true);
+			});
+
+			it('forcedParallelExecution defaults to false', () => {
+				expect(useSettingsStore.getState().forcedParallelExecution).toBe(false);
+			});
+
+			it('forcedParallelAcknowledged defaults to false', () => {
+				expect(useSettingsStore.getState().forcedParallelAcknowledged).toBe(false);
 			});
 
 			it('setDefaultSaveToHistory updates state and persists', () => {

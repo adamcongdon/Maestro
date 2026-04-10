@@ -17,6 +17,7 @@ vi.mock('../../../renderer/hooks/agent/useAgentCapabilities', async () => {
 });
 
 import { useInputProcessing } from '../../../renderer/hooks/input/useInputProcessing';
+import { useSettingsStore } from '../../../renderer/stores/settingsStore';
 import type {
 	Session,
 	AITab,
@@ -873,6 +874,119 @@ describe('useInputProcessing', () => {
 			expect(updatedSessions[0].state).toBe('idle'); // Session stays idle
 			expect(updatedSessions[0].executionQueue.length).toBe(1); // Message is queued
 			expect(updatedSessions[0].executionQueue[0].text).toBe('regular message');
+		});
+	});
+
+	describe('forced parallel execution', () => {
+		it('bypasses queue when forceParallel is true and setting is enabled', async () => {
+			vi.useFakeTimers();
+			useSettingsStore.setState({ forcedParallelExecution: true } as any);
+
+			const busySession = createMockSession({
+				state: 'busy',
+				aiTabs: [createMockTab({ state: 'busy' })],
+			});
+			const deps = createDeps({
+				activeSession: busySession,
+				inputValue: 'forced message',
+			});
+			const { result } = renderHook(() => useInputProcessing(deps));
+
+			await act(async () => {
+				await result.current.processInput(undefined, { forceParallel: true });
+			});
+
+			// Should NOT queue — should attempt to process immediately
+			// When forceParallel bypasses queue, setSessions is called to update logs (not queue)
+			if (mockSetSessions.mock.calls.length > 0) {
+				const setSessionsCall = mockSetSessions.mock.calls[0][0];
+				const updatedSessions = setSessionsCall([busySession]);
+				// If it went through the queue path, executionQueue would have an item
+				// Force parallel should skip the queue entirely
+				expect(updatedSessions[0].executionQueue.length).toBe(0);
+			}
+
+			vi.useRealTimers();
+		});
+
+		it('bypasses queue when AutoRun is active and forceParallel is true', async () => {
+			vi.useFakeTimers();
+			useSettingsStore.setState({ forcedParallelExecution: true } as any);
+
+			const runningBatchState: BatchRunState = {
+				...defaultBatchState,
+				isRunning: true,
+			};
+			mockGetBatchState.mockReturnValue(runningBatchState);
+
+			const busySession = createMockSession({ state: 'busy' });
+			const deps = createDeps({
+				activeSession: busySession,
+				inputValue: 'forced during autorun',
+				activeBatchRunState: runningBatchState,
+			});
+			const { result } = renderHook(() => useInputProcessing(deps));
+
+			await act(async () => {
+				await result.current.processInput(undefined, { forceParallel: true });
+			});
+
+			// Should NOT queue even though AutoRun is active
+			if (mockSetSessions.mock.calls.length > 0) {
+				const setSessionsCall = mockSetSessions.mock.calls[0][0];
+				const updatedSessions = setSessionsCall([busySession]);
+				expect(updatedSessions[0].executionQueue.length).toBe(0);
+			}
+
+			vi.useRealTimers();
+		});
+
+		it('still queues when forceParallel is true but setting is disabled', async () => {
+			useSettingsStore.setState({ forcedParallelExecution: false } as any);
+
+			const busySession = createMockSession({
+				state: 'busy',
+				aiTabs: [createMockTab({ state: 'busy' })],
+			});
+			const deps = createDeps({
+				activeSession: busySession,
+				inputValue: 'should still queue',
+			});
+			const { result } = renderHook(() => useInputProcessing(deps));
+
+			await act(async () => {
+				await result.current.processInput(undefined, { forceParallel: true });
+			});
+
+			// Should queue because the setting is off
+			expect(mockSetSessions).toHaveBeenCalled();
+			const setSessionsCall = mockSetSessions.mock.calls[0][0];
+			const updatedSessions = setSessionsCall([busySession]);
+			expect(updatedSessions[0].executionQueue.length).toBe(1);
+		});
+
+		it('queues normally when forceParallel is absent and session is busy', async () => {
+			useSettingsStore.setState({ forcedParallelExecution: true } as any);
+
+			const busySession = createMockSession({
+				state: 'busy',
+				aiTabs: [createMockTab({ state: 'busy' })],
+			});
+			const deps = createDeps({
+				activeSession: busySession,
+				inputValue: 'normal message',
+			});
+			const { result } = renderHook(() => useInputProcessing(deps));
+
+			await act(async () => {
+				await result.current.processInput();
+			});
+
+			// Should queue because forceParallel was not passed
+			expect(mockSetSessions).toHaveBeenCalled();
+			const setSessionsCall = mockSetSessions.mock.calls[0][0];
+			const updatedSessions = setSessionsCall([busySession]);
+			expect(updatedSessions[0].executionQueue.length).toBe(1);
 		});
 	});
 

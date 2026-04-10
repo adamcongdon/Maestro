@@ -1325,6 +1325,88 @@ describe('General edge cases — additional', () => {
 		expect(deps.processInput).not.toHaveBeenCalled();
 	});
 
+	// ============================================================================
+	// Forced Parallel Send shortcut
+	// ============================================================================
+
+	describe('Forced parallel send shortcut', () => {
+		it('Cmd+Shift+Enter calls processInput with forceParallel in AI mode', () => {
+			setActiveSession({ inputMode: 'ai' });
+			useSettingsStore.setState({
+				shortcuts: {
+					...useSettingsStore.getState().shortcuts,
+					forcedParallelSend: {
+						id: 'forcedParallelSend',
+						label: 'Forced Parallel Send',
+						keys: ['Meta', 'Shift', 'Enter'],
+					},
+				},
+			} as any);
+			const deps = createMockDeps();
+			const { result } = renderHook(() => useInputKeyDown(deps));
+			const e = createKeyEvent('Enter', { metaKey: true, shiftKey: true });
+
+			act(() => {
+				result.current.handleInputKeyDown(e);
+			});
+
+			expect(e.preventDefault).toHaveBeenCalled();
+			expect(deps.processInput).toHaveBeenCalledWith(undefined, { forceParallel: true });
+		});
+
+		it('Cmd+Shift+Enter does NOT trigger forced parallel in terminal mode', () => {
+			setActiveSession({ inputMode: 'terminal' });
+			useSettingsStore.setState({
+				shortcuts: {
+					...useSettingsStore.getState().shortcuts,
+					forcedParallelSend: {
+						id: 'forcedParallelSend',
+						label: 'Forced Parallel Send',
+						keys: ['Meta', 'Shift', 'Enter'],
+					},
+				},
+			} as any);
+			const deps = createMockDeps();
+			const { result } = renderHook(() => useInputKeyDown(deps));
+			const e = createKeyEvent('Enter', { metaKey: true, shiftKey: true });
+
+			act(() => {
+				result.current.handleInputKeyDown(e);
+			});
+
+			// Should NOT have called processInput with forceParallel
+			// It may call processInput normally (terminal send), but not with forceParallel
+			const calls = deps.processInput.mock.calls;
+			const forcedCalls = calls.filter(
+				(c: unknown[]) => c[1] && (c[1] as { forceParallel?: boolean }).forceParallel === true
+			);
+			expect(forcedCalls.length).toBe(0);
+		});
+
+		it('respects user-configured shortcut keys', () => {
+			setActiveSession({ inputMode: 'ai' });
+			useSettingsStore.setState({
+				shortcuts: {
+					...useSettingsStore.getState().shortcuts,
+					forcedParallelSend: {
+						id: 'forcedParallelSend',
+						label: 'Forced Parallel Send',
+						keys: ['Ctrl', 'Shift', 'Enter'],
+					},
+				},
+			} as any);
+			const deps = createMockDeps();
+			const { result } = renderHook(() => useInputKeyDown(deps));
+
+			// Ctrl+Shift+Enter should trigger with custom config
+			const e = createKeyEvent('Enter', { ctrlKey: true, shiftKey: true });
+			act(() => {
+				result.current.handleInputKeyDown(e);
+			});
+			expect(deps.processInput).toHaveBeenCalledWith(undefined, { forceParallel: true });
+		});
+	});
+
 	it('handleInputKeyDown return value is stable across re-renders', () => {
 		const deps = createMockDeps();
 		const { result, rerender } = renderHook(() => useInputKeyDown(deps));
