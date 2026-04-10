@@ -66,6 +66,12 @@ function createMockCallbacks(): MessageHandlerCallbacks {
 		newTab: vi.fn().mockResolvedValue({ tabId: 'new-tab-123' }),
 		closeTab: vi.fn().mockResolvedValue(true),
 		renameTab: vi.fn().mockResolvedValue(true),
+		starTab: vi.fn().mockResolvedValue(true),
+		reorderTab: vi.fn().mockResolvedValue(true),
+		toggleBookmark: vi.fn().mockResolvedValue(true),
+		openFileTab: vi.fn().mockResolvedValue(true),
+		refreshFileTree: vi.fn().mockResolvedValue(true),
+		refreshAutoRunDocs: vi.fn().mockResolvedValue(true),
 		getSessions: vi.fn().mockReturnValue([
 			{
 				id: 'session-1',
@@ -283,7 +289,7 @@ describe('WebSocketMessageHandler', () => {
 			});
 
 			await vi.waitFor(() => {
-				expect(callbacks.selectSession).toHaveBeenCalledWith('session-2', undefined);
+				expect(callbacks.selectSession).toHaveBeenCalledWith('session-2', undefined, undefined);
 			});
 
 			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
@@ -299,7 +305,7 @@ describe('WebSocketMessageHandler', () => {
 			});
 
 			await vi.waitFor(() => {
-				expect(callbacks.selectSession).toHaveBeenCalledWith('session-2', 'tab-5');
+				expect(callbacks.selectSession).toHaveBeenCalledWith('session-2', 'tab-5', undefined);
 			});
 		});
 
@@ -536,6 +542,205 @@ describe('WebSocketMessageHandler', () => {
 		});
 	});
 
+	describe('Open File Tab (Web → Desktop)', () => {
+		it('should open file tab with sessionId and filePath', async () => {
+			handler.handleMessage(client, {
+				type: 'open_file_tab',
+				sessionId: 'session-1',
+				filePath: '/path/to/file.ts',
+			});
+
+			await vi.waitFor(() => {
+				expect(callbacks.openFileTab).toHaveBeenCalledWith('session-1', '/path/to/file.ts');
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('open_file_tab_result');
+			expect(response.success).toBe(true);
+			expect(response.sessionId).toBe('session-1');
+			expect(response.filePath).toBe('/path/to/file.ts');
+		});
+
+		it('should reject open_file_tab with missing sessionId', () => {
+			handler.handleMessage(client, {
+				type: 'open_file_tab',
+				filePath: '/path/to/file.ts',
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('error');
+			expect(response.message).toContain('Missing');
+			expect(callbacks.openFileTab).not.toHaveBeenCalled();
+		});
+
+		it('should reject open_file_tab with missing filePath', () => {
+			handler.handleMessage(client, {
+				type: 'open_file_tab',
+				sessionId: 'session-1',
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('error');
+			expect(response.message).toContain('Missing');
+			expect(callbacks.openFileTab).not.toHaveBeenCalled();
+		});
+
+		it('should handle open_file_tab callback failure', async () => {
+			(callbacks.openFileTab as any).mockRejectedValue(new Error('File not found'));
+
+			handler.handleMessage(client, {
+				type: 'open_file_tab',
+				sessionId: 'session-1',
+				filePath: '/nonexistent/file.ts',
+			});
+
+			await vi.waitFor(() => {
+				const calls = (client.socket.send as any).mock.calls;
+				const lastResponse = JSON.parse(calls[calls.length - 1][0]);
+				expect(lastResponse.type).toBe('error');
+				expect(lastResponse.message).toContain('File not found');
+			});
+		});
+	});
+
+	describe('Refresh File Tree (Web → Desktop)', () => {
+		it('should refresh file tree with sessionId', async () => {
+			handler.handleMessage(client, {
+				type: 'refresh_file_tree',
+				sessionId: 'session-1',
+			});
+
+			await vi.waitFor(() => {
+				expect(callbacks.refreshFileTree).toHaveBeenCalledWith('session-1');
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('refresh_file_tree_result');
+			expect(response.success).toBe(true);
+			expect(response.sessionId).toBe('session-1');
+		});
+
+		it('should reject refresh_file_tree with missing sessionId', () => {
+			handler.handleMessage(client, {
+				type: 'refresh_file_tree',
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('error');
+			expect(response.message).toContain('Missing');
+			expect(callbacks.refreshFileTree).not.toHaveBeenCalled();
+		});
+
+		it('should handle refresh_file_tree callback failure', async () => {
+			(callbacks.refreshFileTree as any).mockRejectedValue(new Error('Tree refresh failed'));
+
+			handler.handleMessage(client, {
+				type: 'refresh_file_tree',
+				sessionId: 'session-1',
+			});
+
+			await vi.waitFor(() => {
+				const calls = (client.socket.send as any).mock.calls;
+				const lastResponse = JSON.parse(calls[calls.length - 1][0]);
+				expect(lastResponse.type).toBe('error');
+				expect(lastResponse.message).toContain('Tree refresh failed');
+			});
+		});
+	});
+
+	describe('Refresh Auto Run Docs (Web → Desktop)', () => {
+		it('should refresh auto-run docs with sessionId', async () => {
+			handler.handleMessage(client, {
+				type: 'refresh_auto_run_docs',
+				sessionId: 'session-1',
+			});
+
+			await vi.waitFor(() => {
+				expect(callbacks.refreshAutoRunDocs).toHaveBeenCalledWith('session-1');
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('refresh_auto_run_docs_result');
+			expect(response.success).toBe(true);
+			expect(response.sessionId).toBe('session-1');
+		});
+
+		it('should reject refresh_auto_run_docs with missing sessionId', () => {
+			handler.handleMessage(client, {
+				type: 'refresh_auto_run_docs',
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('error');
+			expect(response.message).toContain('Missing');
+			expect(callbacks.refreshAutoRunDocs).not.toHaveBeenCalled();
+		});
+
+		it('should handle refresh_auto_run_docs callback failure', async () => {
+			(callbacks.refreshAutoRunDocs as any).mockRejectedValue(
+				new Error('Auto-run refresh failed')
+			);
+
+			handler.handleMessage(client, {
+				type: 'refresh_auto_run_docs',
+				sessionId: 'session-1',
+			});
+
+			await vi.waitFor(() => {
+				const calls = (client.socket.send as any).mock.calls;
+				const lastResponse = JSON.parse(calls[calls.length - 1][0]);
+				expect(lastResponse.type).toBe('error');
+				expect(lastResponse.message).toContain('Auto-run refresh failed');
+			});
+		});
+	});
+
+	describe('Select Session with Focus', () => {
+		it('should forward session selection with focus flag', async () => {
+			handler.handleMessage(client, {
+				type: 'select_session',
+				sessionId: 'session-2',
+				focus: true,
+			});
+
+			await vi.waitFor(() => {
+				expect(callbacks.selectSession).toHaveBeenCalledWith('session-2', undefined, true);
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('select_session_result');
+			expect(response.success).toBe(true);
+		});
+
+		it('should forward session selection without focus flag', async () => {
+			handler.handleMessage(client, {
+				type: 'select_session',
+				sessionId: 'session-2',
+			});
+
+			await vi.waitFor(() => {
+				expect(callbacks.selectSession).toHaveBeenCalledWith(
+					'session-2',
+					undefined,
+					undefined
+				);
+			});
+		});
+
+		it('should forward session selection with both tabId and focus', async () => {
+			handler.handleMessage(client, {
+				type: 'select_session',
+				sessionId: 'session-2',
+				tabId: 'tab-3',
+				focus: true,
+			});
+
+			await vi.waitFor(() => {
+				expect(callbacks.selectSession).toHaveBeenCalledWith('session-2', 'tab-3', true);
+			});
+		});
+	});
+
 	describe('Unknown Message Types', () => {
 		it('should echo unknown message types for debugging', () => {
 			handler.handleMessage(client, {
@@ -601,6 +806,46 @@ describe('WebSocketMessageHandler', () => {
 				type: 'select_tab',
 				sessionId: 'session-1',
 				tabId: 'tab-1',
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('error');
+			expect(response.message).toContain('not configured');
+		});
+
+		it('should handle missing openFileTab callback', () => {
+			const handlerNoCallbacks = new WebSocketMessageHandler();
+
+			handlerNoCallbacks.handleMessage(client, {
+				type: 'open_file_tab',
+				sessionId: 'session-1',
+				filePath: '/path/to/file.ts',
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('error');
+			expect(response.message).toContain('not configured');
+		});
+
+		it('should handle missing refreshFileTree callback', () => {
+			const handlerNoCallbacks = new WebSocketMessageHandler();
+
+			handlerNoCallbacks.handleMessage(client, {
+				type: 'refresh_file_tree',
+				sessionId: 'session-1',
+			});
+
+			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
+			expect(response.type).toBe('error');
+			expect(response.message).toContain('not configured');
+		});
+
+		it('should handle missing refreshAutoRunDocs callback', () => {
+			const handlerNoCallbacks = new WebSocketMessageHandler();
+
+			handlerNoCallbacks.handleMessage(client, {
+				type: 'refresh_auto_run_docs',
+				sessionId: 'session-1',
 			});
 
 			const response = JSON.parse((client.socket.send as any).mock.calls[0][0]);
