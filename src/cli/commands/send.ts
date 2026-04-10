@@ -9,6 +9,7 @@ import type { ToolType } from '../../shared/types';
 
 interface SendOptions {
 	session?: string;
+	tab?: boolean;
 }
 
 interface SendResponse {
@@ -111,6 +112,22 @@ export async function send(
 	const response = buildResponse(agentId, agent.name, result, agent.toolType);
 
 	console.log(JSON.stringify(response, null, 2));
+
+	// If --tab flag is set, focus the session tab in Maestro desktop
+	if (options.tab && result.success) {
+		try {
+			const { withMaestroClient } = await import('../services/maestro-client');
+			await withMaestroClient(async (client) => {
+				return client.sendCommand(
+					{ type: 'select_session', sessionId: agentId, focus: true },
+					'select_session_result'
+				);
+			});
+		} catch {
+			// Maestro desktop not running — print warning but don't fail
+			console.error('Warning: Could not focus session tab (Maestro desktop may not be running)');
+		}
+	}
 
 	if (!result.success) {
 		process.exit(1);

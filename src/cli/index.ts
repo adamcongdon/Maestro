@@ -13,6 +13,10 @@ import { showAgent } from './commands/show-agent';
 import { cleanPlaybooks } from './commands/clean-playbooks';
 import { send } from './commands/send';
 import { listSessions } from './commands/list-sessions';
+import { openFile } from './commands/open-file';
+import { refreshFiles } from './commands/refresh-files';
+import { refreshAutoRun } from './commands/refresh-auto-run';
+import { status } from './commands/status';
 import { settingsList } from './commands/settings-list';
 import { settingsGet } from './commands/settings-get';
 import { settingsSet } from './commands/settings-set';
@@ -117,7 +121,31 @@ program
 	.command('send <agent-id> <message>')
 	.description('Send a message to an agent and get a JSON response')
 	.option('-s, --session <id>', 'Resume an existing agent session (for multi-turn conversations)')
+	.option('-t, --tab', 'Open/focus the session tab in Maestro desktop')
 	.action(send);
+
+// Open file command - open a file preview tab in the desktop app
+program
+	.command('open-file <file-path>')
+	.description('Open a file as a preview tab in the Maestro desktop app')
+	.option('-s, --session <id>', 'Target session (defaults to first available)')
+	.action(openFile);
+
+// Refresh commands
+program
+	.command('refresh-files')
+	.description('Refresh the file tree for a session in Maestro')
+	.option('-s, --session <id>', 'Target session (defaults to first available)')
+	.action(refreshFiles);
+
+program
+	.command('refresh-auto-run')
+	.description('Refresh Auto Run documents for a session in Maestro')
+	.option('-s, --session <id>', 'Target session (defaults to first available)')
+	.action(refreshAutoRun);
+
+// Status command - check if Maestro desktop app is running
+program.command('status').description('Check if Maestro desktop app is running and reachable').action(status);
 
 // Settings commands
 const settings = program.command('settings').description('View and manage Maestro configuration');
