@@ -16,6 +16,7 @@ import { listSessions } from './commands/list-sessions';
 import { openFile } from './commands/open-file';
 import { refreshFiles } from './commands/refresh-files';
 import { refreshAutoRun } from './commands/refresh-auto-run';
+import { autoRun } from './commands/auto-run';
 import { status } from './commands/status';
 import { settingsList } from './commands/settings-list';
 import { settingsGet } from './commands/settings-get';
@@ -143,6 +144,19 @@ program
 	.description('Refresh Auto Run documents for a session in Maestro')
 	.option('-s, --session <id>', 'Target session (defaults to first available)')
 	.action(refreshAutoRun);
+
+// Auto-run command - configure and optionally launch an auto-run session
+program
+	.command('auto-run <docs...>')
+	.description('Configure and optionally launch an auto-run with documents')
+	.option('-s, --session <id>', 'Target session (defaults to first available)')
+	.option('-p, --prompt <text>', 'Custom prompt for the auto-run')
+	.option('--loop', 'Enable looping')
+	.option('--max-loops <n>', 'Maximum loop count (implies --loop)')
+	.option('--save-as <name>', 'Save as a playbook with this name (do not launch)')
+	.option('--launch', 'Start the auto-run immediately (default: just configure)')
+	.option('--reset-on-completion', 'Enable reset-on-completion for all documents')
+	.action(autoRun);
 
 // Status command - check if Maestro desktop app is running
 program.command('status').description('Check if Maestro desktop app is running and reachable').action(status);
