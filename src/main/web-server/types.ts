@@ -293,6 +293,22 @@ export type RefreshFileTreeCallback = (sessionId: string) => Promise<boolean>;
 export type RefreshAutoRunDocsCallback = (sessionId: string) => Promise<boolean>;
 
 /**
+ * Callback type for configuring and optionally launching an auto-run session.
+ * Can save as playbook, launch immediately, or just configure the panel.
+ */
+export type ConfigureAutoRunCallback = (
+	sessionId: string,
+	config: {
+		documents: Array<{ filename: string; resetOnCompletion?: boolean }>;
+		prompt?: string;
+		loopEnabled?: boolean;
+		maxLoops?: number;
+		saveAsPlaybook?: string;
+		launch?: boolean;
+	}
+) => Promise<{ success: boolean; playbookId?: string; error?: string }>;
+
+/**
  * Callback type for fetching current theme.
  */
 export type GetThemeCallback = () => Theme | null;

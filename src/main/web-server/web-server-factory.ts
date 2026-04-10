@@ -554,6 +554,67 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 			return true;
 		});
 
+		server.setConfigureAutoRunCallback(
+			async (
+				sessionId: string,
+				config: {
+					documents: Array<{ filename: string; resetOnCompletion?: boolean }>;
+					prompt?: string;
+					loopEnabled?: boolean;
+					maxLoops?: number;
+					saveAsPlaybook?: string;
+					launch?: boolean;
+				}
+			) => {
+				const mainWindow = getMainWindow();
+				if (!mainWindow) {
+					logger.warn('mainWindow is null for configureAutoRun', 'WebServer');
+					return { success: false, error: 'Desktop app not available' };
+				}
+
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for configureAutoRun', 'WebServer');
+					return { success: false, error: 'Desktop app not available' };
+				}
+
+				// Use response channel pattern for synchronous result
+				return new Promise((resolve) => {
+					const responseChannel = `remote:configureAutoRun:response:${Date.now()}`;
+					let resolved = false;
+
+					const handleResponse = (
+						_event: Electron.IpcMainEvent,
+						result: { success: boolean; playbookId?: string; error?: string }
+					) => {
+						if (resolved) return;
+						resolved = true;
+						clearTimeout(timeoutId);
+						resolve(result);
+					};
+
+					ipcMain.once(responseChannel, handleResponse);
+					mainWindow.webContents.send(
+						'remote:configureAutoRun',
+						sessionId,
+						config,
+						responseChannel
+					);
+
+					// Timeout after 10 seconds (auto-run config may take time)
+					const timeoutId = setTimeout(() => {
+						if (resolved) return;
+						resolved = true;
+						ipcMain.removeListener(responseChannel, handleResponse);
+						logger.warn(
+							`configureAutoRun callback timed out for session ${sessionId}`,
+							'WebServer'
+						);
+						resolve({ success: false, error: 'Request timed out' });
+					}, 10000);
+				});
+			}
+		);
+
 		server.setRefreshAutoRunDocsCallback(async (sessionId: string) => {
 			logger.info(
 				`[Web→Desktop] Refresh auto-run docs callback invoked: session=${sessionId}`,
