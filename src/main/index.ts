@@ -47,6 +47,7 @@ import {
 	registerFilesystemHandlers,
 	registerAttachmentsHandlers,
 	registerWebHandlers,
+	ensureCliServer,
 	registerLeaderboardHandlers,
 	registerNotificationsHandlers,
 	registerSymphonyHandlers,
@@ -419,8 +420,17 @@ app.whenReady().then(async () => {
 	// Start settings file watcher for external changes (e.g., maestro-cli settings set)
 	settingsWatcher.start();
 
-	// Note: Web server is not auto-started - it starts when user enables web interface
-	// via live:startServer IPC call from the renderer
+	// Auto-start web server for CLI IPC (writes discovery file for CLI to find)
+	ensureCliServer({
+		getWebServer: () => webServer,
+		setWebServer: (server) => {
+			webServer = server;
+		},
+		createWebServer,
+		settingsStore: store,
+	}).catch((err) => {
+		logger.error(`Failed to ensure CLI server: ${err}`, 'Startup');
+	});
 
 	app.on('activate', () => {
 		if (BrowserWindow.getAllWindows().length === 0) {

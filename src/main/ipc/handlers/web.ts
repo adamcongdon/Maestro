@@ -27,6 +27,7 @@ import { logger } from '../../utils/logger';
 import { WebServer } from '../../web-server';
 import type { AITabData } from '../../web-server/services/broadcastService';
 import type { SettingsStoreInterface } from '../../stores/types';
+import { writeCliServerInfo, deleteCliServerInfo } from '../../../shared/cli-server-discovery';
 
 /**
  * Timeout for waiting for web server to become active (ms)
@@ -46,6 +47,55 @@ export interface WebHandlerDependencies {
 	setWebServer: (server: WebServer | null) => void;
 	createWebServer: () => WebServer;
 	settingsStore: SettingsStoreInterface;
+}
+
+/**
+ * Auto-start the web server for CLI IPC and write the discovery file.
+ * Called during app initialization so the CLI can always find and connect.
+ *
+ * The web server binds to 0.0.0.0, which exposes it on all interfaces.
+ * This is acceptable for CLI-only mode because the UUID security token
+ * prevents unauthorized access. The same binding is used when the user
+ * enables Live mode for web/mobile access.
+ */
+export async function ensureCliServer(deps: WebHandlerDependencies): Promise<void> {
+	const { getWebServer, setWebServer, createWebServer } = deps;
+
+	try {
+		let webServer = getWebServer();
+
+		// Create web server if it doesn't exist
+		if (!webServer) {
+			logger.info('Creating web server for CLI IPC', 'CliServer');
+			webServer = createWebServer();
+			setWebServer(webServer);
+		}
+
+		// Start if not already running
+		if (!webServer.isActive()) {
+			logger.info('Starting web server for CLI IPC', 'CliServer');
+			const { port, token } = await webServer.start();
+			logger.info(`CLI server running on port ${port}`, 'CliServer');
+
+			writeCliServerInfo({
+				port,
+				token,
+				pid: process.pid,
+				startedAt: Date.now(),
+			});
+		} else {
+			// Server already running — write/refresh the discovery file
+			writeCliServerInfo({
+				port: webServer.getPort(),
+				token: webServer.getSecurityToken(),
+				pid: process.pid,
+				startedAt: Date.now(),
+			});
+		}
+	} catch (error: any) {
+		logger.error(`Failed to start CLI server: ${error.message}`, 'CliServer');
+		// Non-fatal: the app still works without CLI IPC
+	}
 }
 
 /**
@@ -255,6 +305,7 @@ export function registerWebHandlers(deps: WebHandlerDependencies): void {
 			logger.info('Stopping web server', 'WebServer');
 			await webServer.stop();
 			setWebServer(null); // Allow garbage collection, will recreate on next start
+			deleteCliServerInfo(); // Remove discovery file so CLI knows server is gone
 			logger.info('Web server stopped and cleaned up', 'WebServer');
 			return { success: true };
 		} catch (error: any) {
