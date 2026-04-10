@@ -516,5 +516,47 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 		return () => clearInterval(intervalId);
 	}, [isLiveMode, sessionsRef]);
 
+	// Handle remote open file tab from web/CLI interface
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteOpenFileTab(
+			(sessionId: string, filePath: string) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:openFileTab', {
+						detail: { sessionId, filePath },
+					})
+				);
+			}
+		);
+		return () => unsubscribe();
+	}, []);
+
+	// Handle remote file tree refresh from web/CLI interface
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteRefreshFileTree(
+			(sessionId: string) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:refreshFileTree', {
+						detail: { sessionId },
+					})
+				);
+			}
+		);
+		return () => unsubscribe();
+	}, []);
+
+	// Handle remote auto-run docs refresh from web/CLI interface
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteRefreshAutoRunDocs(
+			(sessionId: string) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:refreshAutoRunDocs', {
+						detail: { sessionId },
+					})
+				);
+			}
+		);
+		return () => unsubscribe();
+	}, []);
+
 	return {};
 }

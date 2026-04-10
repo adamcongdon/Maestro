@@ -1775,6 +1775,46 @@ function MaestroConsoleInner() {
 		localHonorGitignore: settings.localHonorGitignore,
 	});
 
+	// --- REMOTE EVENT LISTENERS ---
+	// Handle CustomEvents dispatched by useRemoteIntegration for open file tab, refresh file tree,
+	// and refresh auto-run docs. These are wired here because they need access to hooks defined above.
+	useEffect(() => {
+		const handleOpenFileTabEvent = async (e: Event) => {
+			const { sessionId, filePath } = (e as CustomEvent).detail;
+			// Switch to the target session
+			setActiveSessionId(sessionId);
+			// Read the file content
+			try {
+				const content = await window.maestro.fs.readFile(filePath);
+				if (content !== null) {
+					const name = filePath.split('/').pop() || filePath;
+					handleOpenFileTab({ path: filePath, name, content });
+				}
+			} catch (err) {
+				console.error('[Remote] Failed to open file tab:', err);
+			}
+		};
+
+		const handleRefreshFileTreeEvent = (e: Event) => {
+			const { sessionId } = (e as CustomEvent).detail;
+			refreshFileTree(sessionId);
+		};
+
+		const handleRefreshAutoRunDocsEvent = () => {
+			handleAutoRunRefresh();
+		};
+
+		window.addEventListener('maestro:openFileTab', handleOpenFileTabEvent);
+		window.addEventListener('maestro:refreshFileTree', handleRefreshFileTreeEvent);
+		window.addEventListener('maestro:refreshAutoRunDocs', handleRefreshAutoRunDocsEvent);
+
+		return () => {
+			window.removeEventListener('maestro:openFileTab', handleOpenFileTabEvent);
+			window.removeEventListener('maestro:refreshFileTree', handleRefreshFileTreeEvent);
+			window.removeEventListener('maestro:refreshAutoRunDocs', handleRefreshAutoRunDocsEvent);
+		};
+	}, [setActiveSessionId, handleOpenFileTab, refreshFileTree, handleAutoRunRefresh]);
+
 	// --- FILE EXPLORER EFFECTS ---
 	// Extracted hook for file explorer side effects and keyboard navigation (Phase 2.6)
 	const { stableFileTree, handleMainPanelFileClick } = useFileExplorerEffects({
