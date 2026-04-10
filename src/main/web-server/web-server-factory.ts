@@ -548,6 +548,25 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 			return true;
 		});
 
+		server.setRefreshAutoRunDocsCallback(async (sessionId: string) => {
+			logger.info(
+				`[Web→Desktop] Refresh auto-run docs callback invoked: session=${sessionId}`,
+				'WebServer'
+			);
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for refreshAutoRunDocs', 'WebServer');
+				return false;
+			}
+
+			if (!isWebContentsAvailable(mainWindow)) {
+				logger.warn('webContents is not available for refreshAutoRunDocs', 'WebServer');
+				return false;
+			}
+			mainWindow.webContents.send('remote:refreshAutoRunDocs', sessionId);
+			return true;
+		});
+
 		return server;
 	};
 }
