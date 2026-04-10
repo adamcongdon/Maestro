@@ -1777,7 +1777,8 @@ function MaestroConsoleInner() {
 
 	// --- REMOTE EVENT LISTENERS ---
 	// Handle CustomEvents dispatched by useRemoteIntegration for open file tab, refresh file tree,
-	// and refresh auto-run docs. These are wired here because they need access to hooks defined above.
+	// refresh auto-run docs, and configure auto-run. These are wired here because they need access
+	// to hooks defined above (startBatchRun, playbooks API, sessions).
 	useEffect(() => {
 		const handleOpenFileTabEvent = async (e: Event) => {
 			const { sessionId, filePath } = (e as CustomEvent).detail;
@@ -1804,14 +1805,77 @@ function MaestroConsoleInner() {
 			handleAutoRunRefresh();
 		};
 
+		const handleConfigureAutoRunEvent = async (e: Event) => {
+			const { sessionId, config, responseChannel } = (e as CustomEvent).detail;
+
+			const sendResponse = (result: { success: boolean; playbookId?: string; error?: string }) => {
+				window.maestro.process.sendRemoteConfigureAutoRunResponse(responseChannel, result);
+			};
+
+			try {
+				if (config.saveAsPlaybook) {
+					// Save as playbook without launching
+					const result = await window.maestro.playbooks.create(sessionId, {
+						name: config.saveAsPlaybook,
+						documents: config.documents.map((d: { filename: string; resetOnCompletion?: boolean }) => ({
+							filename: d.filename,
+							resetOnCompletion: d.resetOnCompletion || false,
+						})),
+						loopEnabled: config.loopEnabled || false,
+						maxLoops: config.maxLoops ?? null,
+						prompt: config.prompt || '',
+					});
+					sendResponse({
+						success: result.success,
+						playbookId: result.playbook?.id,
+						error: result.error,
+					});
+				} else if (config.launch) {
+					// Build BatchRunConfig and launch immediately
+					const session = sessionsRef.current.find((s) => s.id === sessionId);
+					if (!session) {
+						sendResponse({ success: false, error: `Session ${sessionId} not found` });
+						return;
+					}
+					if (!session.autoRunFolderPath) {
+						sendResponse({ success: false, error: 'Session has no Auto Run folder configured' });
+						return;
+					}
+
+					const documents = config.documents.map((d: { filename: string; resetOnCompletion?: boolean }, idx: number) => ({
+						id: `${sessionId}-remote-${idx}`,
+						filename: d.filename,
+						resetOnCompletion: d.resetOnCompletion || false,
+						isDuplicate: false,
+					}));
+					const batchConfig = {
+						documents,
+						prompt: config.prompt || '',
+						loopEnabled: config.loopEnabled || false,
+						maxLoops: config.maxLoops ?? null,
+					};
+					startBatchRunRef.current(sessionId, batchConfig, session.autoRunFolderPath);
+					sendResponse({ success: true });
+				} else {
+					// Configure only — no launch, no save. Acknowledge receipt.
+					sendResponse({ success: true });
+				}
+			} catch (err) {
+				console.error('[Remote] Failed to configure auto-run:', err);
+				sendResponse({ success: false, error: String(err) });
+			}
+		};
+
 		window.addEventListener('maestro:openFileTab', handleOpenFileTabEvent);
 		window.addEventListener('maestro:refreshFileTree', handleRefreshFileTreeEvent);
 		window.addEventListener('maestro:refreshAutoRunDocs', handleRefreshAutoRunDocsEvent);
+		window.addEventListener('maestro:configureAutoRun', handleConfigureAutoRunEvent);
 
 		return () => {
 			window.removeEventListener('maestro:openFileTab', handleOpenFileTabEvent);
 			window.removeEventListener('maestro:refreshFileTree', handleRefreshFileTreeEvent);
 			window.removeEventListener('maestro:refreshAutoRunDocs', handleRefreshAutoRunDocsEvent);
+			window.removeEventListener('maestro:configureAutoRun', handleConfigureAutoRunEvent);
 		};
 	}, [setActiveSessionId, handleOpenFileTab, refreshFileTree, handleAutoRunRefresh]);
 

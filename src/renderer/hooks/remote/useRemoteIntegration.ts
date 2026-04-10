@@ -558,5 +558,31 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 		return () => unsubscribe();
 	}, []);
 
+	// Handle remote configure auto-run from web/CLI interface
+	// Dispatches CustomEvent so App.tsx can handle with access to startBatchRun and playbooks API
+	useEffect(() => {
+		const unsubscribe = window.maestro.process.onRemoteConfigureAutoRun(
+			(
+				sessionId: string,
+				config: {
+					documents: Array<{ filename: string; resetOnCompletion?: boolean }>;
+					prompt?: string;
+					loopEnabled?: boolean;
+					maxLoops?: number;
+					saveAsPlaybook?: string;
+					launch?: boolean;
+				},
+				responseChannel: string
+			) => {
+				window.dispatchEvent(
+					new CustomEvent('maestro:configureAutoRun', {
+						detail: { sessionId, config, responseChannel },
+					})
+				);
+			}
+		);
+		return () => unsubscribe();
+	}, []);
+
 	return {};
 }
