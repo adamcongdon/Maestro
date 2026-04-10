@@ -510,6 +510,25 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 			return true;
 		});
 
+		server.setOpenFileTabCallback(async (sessionId: string, filePath: string) => {
+			logger.info(
+				`[Web→Desktop] Open file tab callback invoked: session=${sessionId}, filePath=${filePath}`,
+				'WebServer'
+			);
+			const mainWindow = getMainWindow();
+			if (!mainWindow) {
+				logger.warn('mainWindow is null for openFileTab', 'WebServer');
+				return false;
+			}
+
+			if (!isWebContentsAvailable(mainWindow)) {
+				logger.warn('webContents is not available for openFileTab', 'WebServer');
+				return false;
+			}
+			mainWindow.webContents.send('remote:openFileTab', sessionId, filePath);
+			return true;
+		});
+
 		return server;
 	};
 }
